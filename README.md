@@ -2,6 +2,8 @@
 
 Access your Mac's terminal from your phone. Run `rt`, scan the QR code, and you're in — with a mobile-friendly web UI featuring virtual keyboard buttons, clipboard sync, and real-time session mirroring.
 
+> **macOS only** — requires macOS with Homebrew.
+
 ## How it works
 
 `rt` spins up a local terminal session using **tmux**, exposes it through **ttyd** (web-based terminal), routes traffic through **Caddy** (reverse proxy with auth token), and tunnels it to the internet via **cloudflared**. A companion clipboard bridge server handles copy/paste between your phone and the terminal.
