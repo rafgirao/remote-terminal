@@ -32,7 +32,7 @@ rt_check_update() {
 
   # Fetch latest tag from GitHub (background-friendly, with timeout)
   local latest
-  latest=$(curl -sf --max-time 3 "https://api.github.com/repos/rafgirao/homebrew-remote-terminal/tags" 2>/dev/null \
+  latest=$(curl -sf --max-time 3 "https://api.github.com/repos/rafgirao/remote-terminal/tags" 2>/dev/null \
     | grep -o '"name": *"[^"]*"' | head -1 | cut -d'"' -f4 | sed 's/^v//')
 
   if [[ -z "$latest" ]]; then
