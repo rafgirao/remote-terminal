@@ -203,6 +203,10 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
 
+class ReusableHTTPServer(HTTPServer):
+    allow_reuse_address = True
+
+
 if __name__ == "__main__":
-    server = HTTPServer(("127.0.0.1", PORT), Handler)
+    server = ReusableHTTPServer(("127.0.0.1", PORT), Handler)
     server.serve_forever()

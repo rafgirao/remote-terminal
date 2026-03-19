@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-RT_VERSION="0.7.0"
+RT_VERSION="0.8.0"
 RT_SHARE="$(cd "$(dirname "$0")/../share/rt" && pwd)"
 RT_ORIGINAL_ARGS=("$@")
 
@@ -288,6 +288,12 @@ cmd_start() {
     done
     rm -rf "$piddir"
   fi
+
+  # Kill any orphan processes on our ports
+  rt_ports "$name"
+  for p in "$RT_CLIP_PORT" "$RT_TTYD_PORT" "$RT_CADDY_PORT"; do
+    lsof -ti :"$p" 2>/dev/null | xargs kill -9 2>/dev/null || true
+  done
 
   mkdir -p "$piddir"
 
