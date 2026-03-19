@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -o pipefail
 
-RT_VERSION="0.15.0"
+RT_VERSION="0.16.0"
 RT_SHARE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../share/rt" && pwd)"
 # --- Update Check ---
 
@@ -63,13 +63,10 @@ cmd_setup() {
   # tmux.conf setup
   echo ""
   if ! grep -q 'window-size largest' ~/.tmux.conf 2>/dev/null; then
-    read -r -p "  Add 'set -g window-size largest' to ~/.tmux.conf? [Y/n] " tmux_answer </dev/tty
-    case "${tmux_answer:-Y}" in
-      [Yy]|"")
-        echo "set -g window-size largest" >> ~/.tmux.conf
-        echo "  Added to ~/.tmux.conf"
-        ;;
-    esac
+    # Remove old 'latest' setting if present
+    sed -i '' '/window-size latest/d' ~/.tmux.conf 2>/dev/null || sed -i '/window-size latest/d' ~/.tmux.conf 2>/dev/null
+    echo "set -g window-size largest" >> ~/.tmux.conf
+    echo "  Added 'set -g window-size largest' to ~/.tmux.conf"
   fi
 
   echo ""

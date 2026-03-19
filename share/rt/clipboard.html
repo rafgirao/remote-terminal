@@ -28,6 +28,9 @@
     flex: 1;
     min-height: 0;
     background: #1e1e2e;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
   }
 
   #vkb {
@@ -179,7 +182,11 @@ const fitAddon = new FitAddon();
 term.loadAddon(fitAddon);
 term.loadAddon(new WebLinksAddon());
 term.open(document.getElementById('terminal'));
-fitAddon.fit();
+
+// On mobile, don't fit — keep Mac's column width and allow horizontal scroll
+if (!isMobile) {
+  fitAddon.fit();
+}
 
 // Connect to ttyd WebSocket
 const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -233,7 +240,9 @@ term.onData((data) => {
 });
 
 function doResize() {
-  fitAddon.fit();
+  if (!isMobile) {
+    fitAddon.fit();
+  }
   if (ws.readyState === WebSocket.OPEN) {
     const resize = JSON.stringify({columns: term.cols, rows: term.rows});
     const msg = new Uint8Array([CMD_RESIZE, ...encoder.encode(resize)]);
@@ -315,7 +324,7 @@ document.getElementById('zoom-in').addEventListener('click', (e) => {
   e.preventDefault();
   currentFontSize = Math.min(currentFontSize + 1, 20);
   term.options.fontSize = currentFontSize;
-  fitAddon.fit();
+  if (!isMobile) fitAddon.fit();
   doResize();
 });
 
@@ -323,7 +332,7 @@ document.getElementById('zoom-out').addEventListener('click', (e) => {
   e.preventDefault();
   currentFontSize = Math.max(currentFontSize - 1, 6);
   term.options.fontSize = currentFontSize;
-  fitAddon.fit();
+  if (!isMobile) fitAddon.fit();
   doResize();
 });
 
