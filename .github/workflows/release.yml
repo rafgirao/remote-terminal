@@ -1,0 +1,46 @@
+name: Release & Update Homebrew
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get tarball SHA256
+        id: sha
+        run: |
+          SHA=$(curl -sL "https://github.com/${{ github.repository }}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz" | sha256sum | awk '{print $1}')
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew formula
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_PAT }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+
+          git clone https://x-access-token:${GH_TOKEN}@github.com/rafgirao/homebrew-remote-terminal.git /tmp/homebrew
+          cd /tmp/homebrew
+
+          sed -i "s|archive/refs/tags/v.*\.tar\.gz|archive/refs/tags/v${VERSION}.tar.gz|" Formula/cli.rb
+          sed -i "s/sha256 \".*\"/sha256 \"${SHA}\"/" Formula/cli.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/cli.rb
+          git commit -m "Bump formula to v${VERSION}"
+          git push
