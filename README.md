@@ -4,12 +4,12 @@ Access your Mac's terminal from your phone. Run `rt`, scan the QR code, and you'
 
 ## How it works
 
-`rt` spins up a local terminal session using **tmux**, exposes it through **ttyd** (web-based terminal), routes traffic through **Caddy** (reverse proxy with auth token), and tunnels it to the internet via **ngrok** or **cloudflared**. A companion clipboard bridge server handles copy/paste between your phone and the terminal.
+`rt` spins up a local terminal session using **tmux**, exposes it through **ttyd** (web-based terminal), routes traffic through **Caddy** (reverse proxy with auth token), and tunnels it to the internet via **cloudflared**. A companion clipboard bridge server handles copy/paste between your phone and the terminal.
 
 ```
 ┌──────────┐     ┌──────────────┐     ┌───────┐     ┌────────────────┐
-│  Phone   │────▶│ ngrok/       │────▶│ Caddy  │────▶│ ttyd (terminal)│
-│ (browser)│     │ cloudflared  │     │ :port  │    ▶│ clipboard srv  │
+│  Phone   │────▶│ cloudflared  │────▶│ Caddy  │────▶│ ttyd (terminal)│
+│ (browser)│     │  (tunnel)    │     │ :port  │    ▶│ clipboard srv  │
 └──────────┘     └──────────────┘     └───────┘     └────────────────┘
                                                            │
                                                      ┌─────┴─────┐
@@ -36,7 +36,7 @@ brew install rafgirao/remote-terminal/cli
 curl -fsSL https://raw.githubusercontent.com/rafgirao/remote-terminal/main/install.sh | bash
 ```
 
-After installing with either method, just run `rt`. On first run, it will ask which tunnel provider you want to use (ngrok, cloudflared, or both) and install it automatically.
+After installing with either method, just run `rt`. On first run, it will install **cloudflared** automatically if not already present.
 
 ### Dependencies
 
@@ -113,7 +113,7 @@ rt rc work
 
 Relaunches all services (ttyd, Caddy, tunnel) for an existing tmux session without losing your terminal history. Use this when:
 - The tunnel URL expired
-- ngrok/cloudflared crashed
+- cloudflared crashed
 - You need a fresh URL
 
 The tmux session stays alive — only the networking layer restarts.
@@ -139,7 +139,7 @@ rt stop --all
 rt setup
 ```
 
-Re-run the tunnel provider setup at any time (e.g. to add cloudflared after initially choosing ngrok). Also configures `~/.tmux.conf`.
+Re-run the setup at any time to reinstall cloudflared or configure `~/.tmux.conf`.
 
 ### Version
 
@@ -221,7 +221,7 @@ Ports are automatically assigned based on the session name hash to avoid collisi
 
 ### Tunnel priority
 
-`rt` tries **ngrok** first (up to 15 seconds). If ngrok fails or isn't installed, it falls back to **cloudflared** (up to 30 seconds).
+`rt` uses **cloudflared** to create a tunnel. It waits up to 30 seconds for the tunnel URL to become available.
 
 ### Security
 
@@ -234,8 +234,7 @@ Ports are automatically assigned based on the session name hash to avoid collisi
 
 ### "Failed to get tunnel URL"
 
-- Make sure `ngrok` or `cloudflared` is installed
-- If using ngrok, make sure you've authenticated: `ngrok config add-authtoken <token>`
+- Make sure `cloudflared` is installed: `brew install cloudflared`
 - Check the tunnel log: `cat /tmp/remote-terminal-<name>/tunnel.log`
 
 ### Session won't start

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -o pipefail
 
-RT_VERSION="0.11.0"
+RT_VERSION="0.12.0"
 RT_SHARE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../share/rt" && pwd)"
 # --- Update Check ---
 
@@ -41,71 +41,15 @@ cmd_setup() {
   echo "  Remote Terminal — Setup"
   echo ""
 
-  local has_ngrok=0 has_cloudflared=0
-  command -v ngrok &>/dev/null && has_ngrok=1
-  command -v cloudflared &>/dev/null && has_cloudflared=1
-
-  if [[ $has_ngrok -eq 1 && $has_cloudflared -eq 1 ]]; then
-    echo "  Both ngrok and cloudflared are already installed."
+  if command -v cloudflared &>/dev/null; then
+    echo "  cloudflared is already installed."
     echo ""
-    return
+  else
+    echo "  Installing cloudflared..."
+    brew install cloudflared
+    echo ""
+    echo "  cloudflared installed!"
   fi
-
-  echo "  A tunnel provider is required to expose your terminal."
-  echo ""
-  echo "  1) ngrok        — fast, requires free account"
-  echo "  2) cloudflared  — free, no account needed"
-  echo "  3) Both"
-  [[ $has_ngrok -eq 1 ]] && echo "     (ngrok already installed)"
-  [[ $has_cloudflared -eq 1 ]] && echo "     (cloudflared already installed)"
-  echo ""
-
-  read -r -p "  Choose [1/2/3]: " choice </dev/tty
-  echo ""
-
-  case "$choice" in
-    1)
-      if [[ $has_ngrok -eq 0 ]]; then
-        echo "  Installing ngrok..."
-        brew install ngrok 2>/dev/null || brew install --cask ngrok 2>/dev/null
-        echo ""
-        echo "  ngrok installed! Authenticate with:"
-        echo "    ngrok config add-authtoken <your-token>"
-        echo "    (get your token at https://dashboard.ngrok.com)"
-      else
-        echo "  ngrok is already installed."
-      fi
-      ;;
-    2)
-      if [[ $has_cloudflared -eq 0 ]]; then
-        echo "  Installing cloudflared..."
-        brew install cloudflared
-      else
-        echo "  cloudflared is already installed."
-      fi
-      ;;
-    3)
-      if [[ $has_ngrok -eq 0 ]]; then
-        echo "  Installing ngrok..."
-        brew install ngrok 2>/dev/null || brew install --cask ngrok 2>/dev/null
-      fi
-      if [[ $has_cloudflared -eq 0 ]]; then
-        echo "  Installing cloudflared..."
-        brew install cloudflared
-      fi
-      echo ""
-      echo "  Both installed! ngrok will be used first, cloudflared as fallback."
-      if [[ $has_ngrok -eq 0 ]]; then
-        echo "  Authenticate ngrok with:"
-        echo "    ngrok config add-authtoken <your-token>"
-        echo "    (get your token at https://dashboard.ngrok.com)"
-      fi
-      ;;
-    *)
-      echo "  Invalid choice. Run 'rt setup' again."
-      return 1
-      ;;
-  esac
 
   # tmux.conf setup
   echo ""
@@ -178,8 +122,8 @@ EOF
   caddy run --config "${piddir}/Caddyfile" --adapter caddyfile > "${piddir}/caddy.log" 2>&1 &
   echo $! > "${piddir}/caddy.pid"
 
-  # Tunnel: try ngrok first, fallback to cloudflared
-  ngrok http "$RT_CADDY_PORT" --log=stdout > "${piddir}/tunnel.log" 2>&1 &
+  # Tunnel
+  cloudflared tunnel --url "http://localhost:${RT_CADDY_PORT}" --no-autoupdate > "${piddir}/tunnel.log" 2>&1 &
   echo $! > "${piddir}/tunnel.pid"
 }
 
@@ -187,29 +131,14 @@ rt_wait_url() {
   local piddir="$1"
   local url=""
 
-  for i in $(seq 1 15); do
+  for i in $(seq 1 30); do
     if [[ -f "${piddir}/tunnel.pid" ]] && ! kill -0 "$(cat "${piddir}/tunnel.pid")" 2>/dev/null; then
       break
     fi
-    url=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+    url=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "${piddir}/tunnel.log" 2>/dev/null | grep -v api | head -1)
     [[ -n "$url" ]] && break
     sleep 1
   done
-
-  if [[ -z "$url" ]]; then
-    echo "ngrok failed, trying cloudflared..." >&2
-    [[ -f "${piddir}/tunnel.pid" ]] && kill -9 "$(cat "${piddir}/tunnel.pid")" 2>/dev/null || true
-    cloudflared tunnel --url "http://localhost:$(cat "${piddir}/caddy_port")" --no-autoupdate > "${piddir}/tunnel.log" 2>&1 &
-    echo $! > "${piddir}/tunnel.pid"
-    for i in $(seq 1 30); do
-      if [[ -f "${piddir}/tunnel.pid" ]] && ! kill -0 "$(cat "${piddir}/tunnel.pid")" 2>/dev/null; then
-        break
-      fi
-      url=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "${piddir}/tunnel.log" 2>/dev/null | grep -v api | head -1)
-      [[ -n "$url" ]] && break
-      sleep 1
-    done
-  fi
 
   echo "$url"
 }
@@ -265,13 +194,12 @@ rt_open_tab() {
 cmd_start() {
   local name="${1:-remote}"
 
-  # First run: auto-setup if no tunnel provider found
-  if ! command -v ngrok &>/dev/null && ! command -v cloudflared &>/dev/null; then
+  # First run: auto-setup if cloudflared not found
+  if ! command -v cloudflared &>/dev/null; then
     echo ""
-    echo "  No tunnel provider found. Let's set one up!"
+    echo "  cloudflared not found. Let's set it up!"
     cmd_setup
-    # Verify setup succeeded
-    if ! command -v ngrok &>/dev/null && ! command -v cloudflared &>/dev/null; then
+    if ! command -v cloudflared &>/dev/null; then
       echo "  Setup incomplete. Run 'rt setup' to try again."
       exit 1
     fi
