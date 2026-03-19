@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
-RT_VERSION="0.6.0"
+RT_VERSION="0.7.0"
 RT_SHARE="$(cd "$(dirname "$0")/../share/rt" && pwd)"
-RT_ORIGINAL_ARGS=("${@:+$@}")
+RT_ORIGINAL_ARGS=("$@")
 
 # --- Update Check ---
 
@@ -24,7 +24,7 @@ rt_check_update() {
         if brew upgrade rafgirao/remote-terminal/cli 2>/dev/null; then
           echo "  Updated to v${latest}!"
           echo ""
-          exec rt ${RT_ORIGINAL_ARGS[@]+"${RT_ORIGINAL_ARGS[@]}"}
+          exec rt "${RT_ORIGINAL_ARGS[@]}"
         else
           echo "  Update failed. Try: brew upgrade rafgirao/remote-terminal/cli"
           echo ""
