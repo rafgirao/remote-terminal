@@ -22,13 +22,15 @@ Every session is protected by a random 128-bit token in the URL — no one can a
 
 ## Install
 
-### Homebrew
+There are two ways to install Remote Terminal. Choose whichever you prefer:
+
+**Option 1 — Homebrew** (recommended, manages dependencies and updates automatically):
 
 ```bash
 brew install rafgirao/remote-terminal/cli
 ```
 
-### Script
+**Option 2 — Script** (if you don't use Homebrew):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rafgirao/remote-terminal/main/install.sh | bash
