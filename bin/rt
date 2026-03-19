@@ -284,7 +284,7 @@ cmd_start() {
 
   if [[ -d "$piddir" ]]; then
     for pidfile in "${piddir}"/*.pid; do
-      [[ -f "$pidfile" ]] && kill -9 "$(cat "$pidfile")" 2>/dev/null
+      [[ -f "$pidfile" ]] && kill -9 "$(cat "$pidfile")" 2>/dev/null || true
     done
     rm -rf "$piddir"
   fi
