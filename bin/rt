@@ -198,15 +198,15 @@ EOF
   ttyd -W -p "$RT_TTYD_PORT" \
     -t fontSize=14 \
     -t 'theme={"background":"#1e1e2e","foreground":"#cdd6f4"}' \
-    "${RT_SHARE}/tmux-client.sh" "$name" &
+    "${RT_SHARE}/tmux-client.sh" "$name" > "${piddir}/ttyd.log" 2>&1 &
   echo $! > "${piddir}/ttyd.pid"
 
   # Clipboard bridge server
-  python3 "${RT_SHARE}/clipboard-server.py" "$name" "/${token}/terminal/" "$RT_CLIP_PORT" &
+  python3 "${RT_SHARE}/clipboard-server.py" "$name" "/${token}/terminal/" "$RT_CLIP_PORT" > "${piddir}/clip.log" 2>&1 &
   echo $! > "${piddir}/clip.pid"
 
   # Caddy
-  caddy run --config "${piddir}/Caddyfile" --adapter caddyfile &
+  caddy run --config "${piddir}/Caddyfile" --adapter caddyfile > "${piddir}/caddy.log" 2>&1 &
   echo $! > "${piddir}/caddy.pid"
 
   # Tunnel: try ngrok first, fallback to cloudflared
