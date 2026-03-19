@@ -2,7 +2,7 @@
 set -eo pipefail
 
 RT_VERSION="0.8.0"
-RT_SHARE="$(cd "$(dirname "$0")/../share/rt" && pwd)"
+RT_SHARE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../share/rt" && pwd)"
 RT_ORIGINAL_ARGS=("$@")
 
 # --- Update Check ---
@@ -325,11 +325,11 @@ cmd_list() {
     [[ -d "$piddir" ]] || continue
     local session="${piddir##*remote-terminal-}"
     local state="stopped"
-    [[ -f "${piddir}/ttyd.pid" ]] && kill -0 "$(cat "${piddir}/ttyd.pid")" 2>/dev/null && state="running"
+    if [[ -f "${piddir}/ttyd.pid" ]] && kill -0 "$(cat "${piddir}/ttyd.pid")" 2>/dev/null; then state="running"; fi
     echo "  ${session} (${state})"
     found=1
   done
-  [[ $found -eq 0 ]] && echo "  No sessions."
+  if [[ $found -eq 0 ]]; then echo "  No sessions."; fi
 }
 
 cmd_qr() {
@@ -430,22 +430,25 @@ EOF
 
 # --- Main ---
 
-cmd="${1:-}"
-shift 2>/dev/null || true
+# Guard: allow sourcing for tests without executing
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  cmd="${1:-}"
+  shift 2>/dev/null || true
 
-# Check for updates before starting a session (non-blocking commands skip)
-case "$cmd" in
-  setup|help|--help|-h|version|--version|-v|list|ls|stop) ;;
-  *) rt_check_update ;;
-esac
+  # Check for updates before starting a session (non-blocking commands skip)
+  case "$cmd" in
+    setup|help|--help|-h|version|--version|-v|list|ls|stop) ;;
+    *) rt_check_update ;;
+  esac
 
-case "$cmd" in
-  setup)          cmd_setup ;;
-  list|ls)        cmd_list ;;
-  qr)             cmd_qr "$@" ;;
-  reconnect|rc)   cmd_reconnect "$@" ;;
-  stop)           cmd_stop "$@" ;;
-  version|--version|-v) cmd_version ;;
-  help|--help|-h) cmd_help ;;
-  *)              cmd_start "$cmd" ;;
-esac
+  case "$cmd" in
+    setup)          cmd_setup ;;
+    list|ls)        cmd_list ;;
+    qr)             cmd_qr "$@" ;;
+    reconnect|rc)   cmd_reconnect "$@" ;;
+    stop)           cmd_stop "$@" ;;
+    version|--version|-v) cmd_version ;;
+    help|--help|-h) cmd_help ;;
+    *)              cmd_start "$cmd" ;;
+  esac
+fi
