@@ -14,6 +14,10 @@
     top: -9999px !important;
     left: -9999px !important;
   }
+  .xterm-viewport {
+    -webkit-overflow-scrolling: touch !important;
+    overflow-y: scroll !important;
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { height: 100%; overflow: hidden; }
   body {
@@ -357,36 +361,6 @@ copyClipboardBtn.addEventListener('click', () => {
 closeOverlayBtn.addEventListener('click', () => {
   copyOverlay.classList.remove('active');
 });
-
-// Touch scroll for mobile — swipe up/down scrolls terminal history
-(function() {
-  const el = document.querySelector('#terminal .xterm-screen') || document.getElementById('terminal');
-  let touchStartY = 0;
-  let scrolling = false;
-
-  el.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-      touchStartY = e.touches[0].clientY;
-      scrolling = true;
-    }
-  }, { capture: true, passive: true });
-
-  el.addEventListener('touchmove', (e) => {
-    if (!scrolling || e.touches.length !== 1) return;
-    const deltaY = touchStartY - e.touches[0].clientY;
-    const lines = Math.round(deltaY / 16);
-    if (lines !== 0) {
-      term.scrollLines(lines);
-      touchStartY = e.touches[0].clientY;
-    }
-    e.preventDefault();
-    e.stopPropagation();
-  }, { capture: true, passive: false });
-
-  el.addEventListener('touchend', () => {
-    scrolling = false;
-  }, { capture: true, passive: true });
-})();
 
 term.focus();
 </script>
