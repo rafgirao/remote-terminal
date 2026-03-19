@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -o pipefail
 
-RT_VERSION="0.22.0"
+RT_VERSION="0.23.0"
 RT_SHARE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../share/rt" && pwd)"
 # --- Update Check ---
 
@@ -62,10 +62,10 @@ cmd_setup() {
 
   # tmux.conf setup
   echo ""
-  if ! grep -q 'window-size largest' ~/.tmux.conf 2>/dev/null; then
+  if ! grep -q 'window-size latest' ~/.tmux.conf 2>/dev/null; then
     sed -i '' '/window-size latest/d' ~/.tmux.conf 2>/dev/null || sed -i '/window-size latest/d' ~/.tmux.conf 2>/dev/null
-    echo "set -g window-size largest" >> ~/.tmux.conf
-    echo "  Added 'set -g window-size largest' to ~/.tmux.conf"
+    echo "set -g window-size latest" >> ~/.tmux.conf
+    echo "  Added 'set -g window-size latest' to ~/.tmux.conf"
   fi
 
   echo ""
@@ -110,7 +110,7 @@ EOF
 
   # tmux session
   tmux has-session -t "$name" 2>/dev/null || tmux new-session -d -s "$name"
-  tmux set-option -g window-size largest 2>/dev/null || true
+  tmux set-option -g window-size latest 2>/dev/null || true
 
   # ttyd
   ttyd -W -p "$RT_TTYD_PORT" \
@@ -175,7 +175,7 @@ rt_open_tab() {
       osascript -e "
         tell application \"Terminal\"
           activate
-          do script \"tmux new-session -t $name\"
+          do script \"tmux attach -t $name\"
         end tell
       " &>/dev/null
       ;;
@@ -186,7 +186,7 @@ rt_open_tab() {
         end tell
         delay 0.5
         tell application \"System Events\"
-          keystroke \"tmux new-session -t $name\"
+          keystroke \"tmux attach -t $name\"
           key code 36
         end tell
       " &>/dev/null

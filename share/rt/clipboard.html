@@ -128,6 +128,7 @@
   <div id="paste-row">
     <input id="paste-input" type="text" placeholder="Paste here + Enter" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <button class="vk accent" id="copy-btn" style="flex:0 0 auto;padding:6px 12px;">Copy</button>
+    <button class="vk" id="sync-btn" style="flex:0 0 auto;padding:6px 12px;background:#a6e3a1;color:#1e1e2e;">Sync</button>
   </div>
   <div class="vkb-row">
     <button class="vk" data-key="Escape">Esc</button>
@@ -150,16 +151,14 @@
     <button class="vk" data-key="|">|</button>
     <button class="vk" data-key="/">/</button>
     <button class="vk" data-key="~">~</button>
-    <button class="vk" id="zoom-out">A-</button>
-    <button class="vk" id="zoom-in">A+</button>
   </div>
   <div class="vkb-row">
-    <button class="vk" id="scroll-top">⤒</button>
-    <button class="vk" id="scroll-pgup">PgUp</button>
+    <button class="vk" id="zoom-out">A-</button>
+    <button class="vk" id="zoom-in">A+</button>
     <button class="vk" id="scroll-up">▲</button>
     <button class="vk" id="scroll-down">▼</button>
-    <button class="vk" id="scroll-pgdn">PgDn</button>
-    <button class="vk" id="scroll-bottom">⤓</button>
+    <button class="vk" id="scroll-left">◀</button>
+    <button class="vk" id="scroll-right">▶</button>
   </div>
 </div>
 
@@ -244,6 +243,22 @@ term.onData((data) => {
     ws.send(msg);
   }
 });
+
+// Sync button — reclaim "latest" by sending resize
+document.getElementById('sync-btn').addEventListener('click', (e) => {
+  e.preventDefault();
+  doResize();
+});
+
+// Auto-sync: periodically send resize so mobile stays as "latest"
+// This ensures the terminal always shows content for mobile's size
+setInterval(() => {
+  if (ws.readyState === WebSocket.OPEN) {
+    const resize = JSON.stringify({columns: term.cols, rows: term.rows});
+    const msg = new Uint8Array([CMD_RESIZE, ...encoder.encode(resize)]);
+    ws.send(msg);
+  }
+}, 2000);
 
 function doResize() {
   fitAddon.fit();
@@ -340,30 +355,53 @@ document.getElementById('zoom-out').addEventListener('click', (e) => {
   doResize();
 });
 
-// Scroll buttons
+// Scroll buttons — use tmux copy-mode since alternate screen has no xterm.js scrollback
+// C-b [ = enter copy mode, C-b PgUp = copy mode + page up, q = exit copy mode
+// Scroll buttons — use tmux copy-mode for scrolling
+let inCopyMode = false;
+
+function sendTmuxScroll(keys) {
+  document.activeElement.blur();
+  if (!inCopyMode) {
+    sendData('\x02['); // C-b [ = enter copy mode
+    inCopyMode = true;
+    setTimeout(() => sendData(keys), 50);
+  } else {
+    sendData(keys);
+  }
+}
+
+function exitCopyMode() {
+  if (inCopyMode) {
+    sendData('q');
+    inCopyMode = false;
+  }
+}
+
 document.getElementById('scroll-up').addEventListener('click', (e) => {
   e.preventDefault();
-  term.scrollLines(-3);
+  sendTmuxScroll('\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A'); // 5 lines up
 });
 document.getElementById('scroll-down').addEventListener('click', (e) => {
   e.preventDefault();
-  term.scrollLines(3);
+  sendTmuxScroll('\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B'); // 5 lines down
 });
-document.getElementById('scroll-pgup').addEventListener('click', (e) => {
+document.getElementById('scroll-left').addEventListener('click', (e) => {
   e.preventDefault();
-  term.scrollPages(-1);
+  // Scroll left: move cursor left 10 positions in copy mode
+  sendTmuxScroll('0'); // go to start of line first
 });
-document.getElementById('scroll-pgdn').addEventListener('click', (e) => {
+document.getElementById('scroll-right').addEventListener('click', (e) => {
   e.preventDefault();
-  term.scrollPages(1);
+  // Scroll right: move cursor to end of line in copy mode
+  sendTmuxScroll('$'); // go to end of line
 });
-document.getElementById('scroll-top').addEventListener('click', (e) => {
-  e.preventDefault();
-  term.scrollToTop();
-});
-document.getElementById('scroll-bottom').addEventListener('click', (e) => {
-  e.preventDefault();
-  term.scrollToBottom();
+
+// Any input key exits copy mode
+const origSendData = sendData;
+const inputKeys = document.querySelectorAll('.vk[data-key], .vk[data-ctrl]');
+inputKeys.forEach(btn => {
+  btn.addEventListener('click', () => exitCopyMode(), true);
 });
 
 const copyBtn = document.getElementById('copy-btn');
