@@ -153,6 +153,14 @@
     <button class="vk" id="zoom-out">A-</button>
     <button class="vk" id="zoom-in">A+</button>
   </div>
+  <div class="vkb-row">
+    <button class="vk" id="scroll-top">⤒</button>
+    <button class="vk" id="scroll-pgup">PgUp</button>
+    <button class="vk" id="scroll-up">▲</button>
+    <button class="vk" id="scroll-down">▼</button>
+    <button class="vk" id="scroll-pgdn">PgDn</button>
+    <button class="vk" id="scroll-bottom">⤓</button>
+  </div>
 </div>
 
 <div id="copy-overlay">
@@ -330,6 +338,32 @@ document.getElementById('zoom-out').addEventListener('click', (e) => {
   term.options.fontSize = currentFontSize;
   fitAddon.fit();
   doResize();
+});
+
+// Scroll buttons
+document.getElementById('scroll-up').addEventListener('click', (e) => {
+  e.preventDefault();
+  term.scrollLines(-3);
+});
+document.getElementById('scroll-down').addEventListener('click', (e) => {
+  e.preventDefault();
+  term.scrollLines(3);
+});
+document.getElementById('scroll-pgup').addEventListener('click', (e) => {
+  e.preventDefault();
+  term.scrollPages(-1);
+});
+document.getElementById('scroll-pgdn').addEventListener('click', (e) => {
+  e.preventDefault();
+  term.scrollPages(1);
+});
+document.getElementById('scroll-top').addEventListener('click', (e) => {
+  e.preventDefault();
+  term.scrollToTop();
+});
+document.getElementById('scroll-bottom').addEventListener('click', (e) => {
+  e.preventDefault();
+  term.scrollToBottom();
 });
 
 const copyBtn = document.getElementById('copy-btn');
