@@ -15,16 +15,25 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub Release
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create release tarball
+        run: |
+          tar czf remote-terminal-${{ steps.version.outputs.version }}.tar.gz \
+            --transform "s,^,remote-terminal-${{ steps.version.outputs.version }}/," \
+            bin/ share/ LICENSE README.md
 
       - name: Get tarball SHA256
         id: sha
         run: |
-          SHA=$(curl -sL "https://github.com/${{ github.repository }}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz" | sha256sum | awk '{print $1}')
+          SHA=$(sha256sum remote-terminal-${{ steps.version.outputs.version }}.tar.gz | awk '{print $1}')
           echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release with asset
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            remote-terminal-${{ steps.version.outputs.version }}.tar.gz \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update Homebrew formula
         env:
@@ -32,11 +41,12 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           SHA="${{ steps.sha.outputs.sha256 }}"
+          URL="https://github.com/rafgirao/remote-terminal/releases/download/v${VERSION}/remote-terminal-${VERSION}.tar.gz"
 
           git clone https://x-access-token:${GH_TOKEN}@github.com/rafgirao/homebrew-remote-terminal.git /tmp/homebrew
           cd /tmp/homebrew
 
-          sed -i "s|archive/refs/tags/v.*\.tar\.gz|archive/refs/tags/v${VERSION}.tar.gz|" Formula/cli.rb
+          sed -i "s|url \".*\"|url \"${URL}\"|" Formula/cli.rb
           sed -i "s/sha256 \".*\"/sha256 \"${SHA}\"/" Formula/cli.rb
 
           git config user.name "github-actions[bot]"
