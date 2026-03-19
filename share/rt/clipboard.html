@@ -172,6 +172,8 @@ const term = new Terminal({
   theme: { background: '#1e1e2e', foreground: '#cdd6f4' },
   cursorBlink: true,
   allowProposedApi: true,
+  scrollback: 5000,
+  smoothScrollDuration: 100,
 });
 
 const fitAddon = new FitAddon();
@@ -358,32 +360,32 @@ closeOverlayBtn.addEventListener('click', () => {
 
 // Touch scroll for mobile — swipe up/down scrolls terminal history
 (function() {
-  const el = document.getElementById('terminal');
+  const el = document.querySelector('#terminal .xterm-screen') || document.getElementById('terminal');
   let touchStartY = 0;
-  let touchStartX = 0;
+  let scrolling = false;
 
   el.addEventListener('touchstart', (e) => {
     if (e.touches.length === 1) {
       touchStartY = e.touches[0].clientY;
-      touchStartX = e.touches[0].clientX;
+      scrolling = true;
     }
-  }, { passive: true });
+  }, { capture: true, passive: true });
 
   el.addEventListener('touchmove', (e) => {
-    if (e.touches.length !== 1) return;
+    if (!scrolling || e.touches.length !== 1) return;
     const deltaY = touchStartY - e.touches[0].clientY;
-    const deltaX = touchStartX - e.touches[0].clientX;
-
-    // Only scroll if vertical movement is dominant
-    if (Math.abs(deltaY) > Math.abs(deltaX)) {
-      const lines = Math.round(deltaY / 20);
-      if (lines !== 0) {
-        term.scrollLines(lines);
-        touchStartY = e.touches[0].clientY;
-      }
-      e.preventDefault();
+    const lines = Math.round(deltaY / 16);
+    if (lines !== 0) {
+      term.scrollLines(lines);
+      touchStartY = e.touches[0].clientY;
     }
-  }, { passive: false });
+    e.preventDefault();
+    e.stopPropagation();
+  }, { capture: true, passive: false });
+
+  el.addEventListener('touchend', () => {
+    scrolling = false;
+  }, { capture: true, passive: true });
 })();
 
 term.focus();
