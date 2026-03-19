@@ -18,14 +18,23 @@ rt_check_update() {
     case "${answer:-Y}" in
       [Yy]|"")
         echo "  Updating..."
-        brew update --quiet 2>/dev/null || true
-        if brew upgrade rafgirao/remote-terminal/cli 2>/dev/null; then
-          echo "  Updated to v${latest}!"
-          echo ""
+        if command -v brew &>/dev/null && brew list rafgirao/remote-terminal/cli &>/dev/null; then
+          # Installed via Homebrew
+          brew update --quiet 2>/dev/null || true
+          if brew upgrade rafgirao/remote-terminal/cli 2>/dev/null; then
+            echo "  Updated to v${latest}!"
+          else
+            echo "  Update failed. Try: brew upgrade rafgirao/remote-terminal/cli"
+          fi
         else
-          echo "  Update failed. Try: brew upgrade rafgirao/remote-terminal/cli"
-          echo ""
+          # Installed via script
+          if curl -fsSL "https://raw.githubusercontent.com/rafgirao/remote-terminal/main/install.sh" | bash; then
+            echo "  Updated to v${latest}!"
+          else
+            echo "  Update failed. Try: curl -fsSL https://raw.githubusercontent.com/rafgirao/remote-terminal/main/install.sh | bash"
+          fi
         fi
+        echo ""
         ;;
       *)
         echo ""
