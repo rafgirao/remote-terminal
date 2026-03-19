@@ -1,0 +1,465 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+RT_VERSION="0.1.0"
+RT_SHARE="$(cd "$(dirname "$0")/../share/rt" && pwd)"
+RT_CACHE_DIR="${HOME}/.cache/rt"
+
+# --- Update Check ---
+
+rt_check_update() {
+  mkdir -p "$RT_CACHE_DIR"
+  local stamp="${RT_CACHE_DIR}/last_update_check"
+  local now
+  now=$(date +%s)
+
+  # Check at most once per day
+  if [[ -f "$stamp" ]]; then
+    local last
+    last=$(cat "$stamp")
+    if (( now - last < 86400 )); then
+      # Show cached result if available
+      if [[ -f "${RT_CACHE_DIR}/update_available" ]]; then
+        local latest
+        latest=$(cat "${RT_CACHE_DIR}/update_available")
+        rt_prompt_update "$latest"
+      fi
+      return
+    fi
+  fi
+
+  echo "$now" > "$stamp"
+
+  # Fetch latest tag from GitHub (background-friendly, with timeout)
+  local latest
+  latest=$(curl -sf --max-time 3 "https://api.github.com/repos/rafgirao/homebrew-remote-terminal/tags" 2>/dev/null \
+    | grep -o '"name": *"[^"]*"' | head -1 | cut -d'"' -f4 | sed 's/^v//')
+
+  if [[ -z "$latest" ]]; then
+    return
+  fi
+
+  if [[ "$latest" != "$RT_VERSION" ]]; then
+    echo "$latest" > "${RT_CACHE_DIR}/update_available"
+    rt_prompt_update "$latest"
+  else
+    rm -f "${RT_CACHE_DIR}/update_available"
+  fi
+}
+
+rt_prompt_update() {
+  local latest="$1"
+  echo ""
+  echo "  ╭─────────────────────────────────────────────╮"
+  echo "  │  Update available: v${RT_VERSION} → v${latest}            │"
+  echo "  ╰─────────────────────────────────────────────╯"
+  echo ""
+  read -r -p "  Update now? [Y/n] " answer </dev/tty
+  case "${answer:-Y}" in
+    [Yy]|"")
+      echo "  Updating..."
+      brew upgrade rafgirao/remote-terminal/cli 2>/dev/null && rm -f "${RT_CACHE_DIR}/update_available" && echo "  Updated to v${latest}!" || echo "  Update failed. Try: brew upgrade rafgirao/rt/rt"
+      echo ""
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
+}
+
+# --- Setup ---
+
+cmd_setup() {
+  echo ""
+  echo "  ╭─────────────────────────────────────────────╮"
+  echo "  │         Remote Terminal — Setup              │"
+  echo "  ╰─────────────────────────────────────────────╯"
+  echo ""
+
+  local has_ngrok=0 has_cloudflared=0
+  command -v ngrok &>/dev/null && has_ngrok=1
+  command -v cloudflared &>/dev/null && has_cloudflared=1
+
+  if [[ $has_ngrok -eq 1 && $has_cloudflared -eq 1 ]]; then
+    echo "  Both ngrok and cloudflared are already installed."
+    echo ""
+    return
+  fi
+
+  echo "  A tunnel provider is required to expose your terminal."
+  echo ""
+  echo "  1) ngrok        — fast, requires free account"
+  echo "  2) cloudflared  — free, no account needed"
+  echo "  3) Both"
+  [[ $has_ngrok -eq 1 ]] && echo "     (ngrok already installed)"
+  [[ $has_cloudflared -eq 1 ]] && echo "     (cloudflared already installed)"
+  echo ""
+
+  read -r -p "  Choose [1/2/3]: " choice </dev/tty
+  echo ""
+
+  case "$choice" in
+    1)
+      if [[ $has_ngrok -eq 0 ]]; then
+        echo "  Installing ngrok..."
+        brew install ngrok 2>/dev/null || brew install --cask ngrok 2>/dev/null
+        echo ""
+        echo "  ngrok installed! Authenticate with:"
+        echo "    ngrok config add-authtoken <your-token>"
+        echo "    (get your token at https://dashboard.ngrok.com)"
+      else
+        echo "  ngrok is already installed."
+      fi
+      ;;
+    2)
+      if [[ $has_cloudflared -eq 0 ]]; then
+        echo "  Installing cloudflared..."
+        brew install cloudflared
+      else
+        echo "  cloudflared is already installed."
+      fi
+      ;;
+    3)
+      if [[ $has_ngrok -eq 0 ]]; then
+        echo "  Installing ngrok..."
+        brew install ngrok 2>/dev/null || brew install --cask ngrok 2>/dev/null
+      fi
+      if [[ $has_cloudflared -eq 0 ]]; then
+        echo "  Installing cloudflared..."
+        brew install cloudflared
+      fi
+      echo ""
+      echo "  Both installed! ngrok will be used first, cloudflared as fallback."
+      if [[ $has_ngrok -eq 0 ]]; then
+        echo "  Authenticate ngrok with:"
+        echo "    ngrok config add-authtoken <your-token>"
+        echo "    (get your token at https://dashboard.ngrok.com)"
+      fi
+      ;;
+    *)
+      echo "  Invalid choice. Run 'rt setup' again."
+      return 1
+      ;;
+  esac
+
+  # tmux.conf setup
+  echo ""
+  if ! grep -q 'window-size largest' ~/.tmux.conf 2>/dev/null; then
+    read -r -p "  Add 'set -g window-size largest' to ~/.tmux.conf? [Y/n] " tmux_answer </dev/tty
+    case "${tmux_answer:-Y}" in
+      [Yy]|"")
+        echo "set -g window-size largest" >> ~/.tmux.conf
+        echo "  Added to ~/.tmux.conf"
+        ;;
+    esac
+  fi
+
+  echo ""
+  echo "  Setup complete! Run 'rt' to start a session."
+  echo ""
+}
+
+# --- Helpers ---
+
+rt_ports() {
+  local name="$1"
+  local hash_num
+  hash_num=$(echo -n "$name" | cksum | awk '{print $1}')
+  local base=$(( 7680 + (hash_num % 500) * 3 ))
+  RT_CLIP_PORT=$base
+  RT_TTYD_PORT=$(( base + 1 ))
+  RT_CADDY_PORT=$(( base + 2 ))
+}
+
+rt_launch_services() {
+  local name="$1" piddir="$2" token="$3"
+
+  rt_ports "$name"
+  echo "$RT_CADDY_PORT" > "${piddir}/caddy_port"
+
+  cat > "${piddir}/Caddyfile" <<EOF
+{
+  admin off
+}
+:${RT_CADDY_PORT} {
+  handle /${token}/terminal/* {
+    uri strip_prefix /${token}/terminal
+    reverse_proxy localhost:${RT_TTYD_PORT}
+  }
+  handle /${token}/* {
+    uri strip_prefix /${token}
+    reverse_proxy localhost:${RT_CLIP_PORT}
+  }
+  respond 403
+}
+EOF
+
+  # tmux session
+  tmux has-session -t "$name" 2>/dev/null || tmux new-session -d -s "$name"
+  tmux set-option -g window-size largest 2>/dev/null || true
+
+  # ttyd
+  ttyd -W -p "$RT_TTYD_PORT" \
+    -t fontSize=14 \
+    -t 'theme={"background":"#1e1e2e","foreground":"#cdd6f4"}' \
+    "${RT_SHARE}/tmux-client.sh" "$name" &
+  echo $! > "${piddir}/ttyd.pid"
+
+  # Clipboard bridge server
+  python3 "${RT_SHARE}/clipboard-server.py" "$name" "/${token}/terminal/" "$RT_CLIP_PORT" &
+  echo $! > "${piddir}/clip.pid"
+
+  # Caddy
+  caddy run --config "${piddir}/Caddyfile" --adapter caddyfile &
+  echo $! > "${piddir}/caddy.pid"
+
+  # Tunnel: try ngrok first, fallback to cloudflared
+  ngrok http "$RT_CADDY_PORT" --log=stdout > "${piddir}/tunnel.log" 2>&1 &
+  echo $! > "${piddir}/tunnel.pid"
+}
+
+rt_wait_url() {
+  local piddir="$1"
+  local url=""
+
+  for i in $(seq 1 15); do
+    if [[ -f "${piddir}/tunnel.pid" ]] && ! kill -0 "$(cat "${piddir}/tunnel.pid")" 2>/dev/null; then
+      break
+    fi
+    url=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+    [[ -n "$url" ]] && break
+    sleep 1
+  done
+
+  if [[ -z "$url" ]]; then
+    echo "ngrok failed, trying cloudflared..." >&2
+    [[ -f "${piddir}/tunnel.pid" ]] && kill -9 "$(cat "${piddir}/tunnel.pid")" 2>/dev/null
+    cloudflared tunnel --url "http://localhost:$(cat "${piddir}/caddy_port")" --no-autoupdate > "${piddir}/tunnel.log" 2>&1 &
+    echo $! > "${piddir}/tunnel.pid"
+    for i in $(seq 1 30); do
+      if [[ -f "${piddir}/tunnel.pid" ]] && ! kill -0 "$(cat "${piddir}/tunnel.pid")" 2>/dev/null; then
+        break
+      fi
+      url=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "${piddir}/tunnel.log" 2>/dev/null | grep -v api | head -1)
+      [[ -n "$url" ]] && break
+      sleep 1
+    done
+  fi
+
+  echo "$url"
+}
+
+rt_print_info() {
+  local name="$1" full_url="$2" label="${3:-one-time use}"
+  echo ""
+  echo "============================================"
+  echo "Session:  ${name} (${label})"
+  echo "URL:      $full_url"
+  echo "============================================"
+  echo ""
+  qrencode -t UTF8 "$full_url"
+}
+
+rt_open_tab() {
+  local name="$1"
+  local term_program="${TERM_PROGRAM:-}"
+
+  case "$term_program" in
+    Apple_Terminal)
+      osascript -e "
+        tell application \"Terminal\"
+          activate
+          do script \"tmux new-session -t $name\"
+        end tell
+      " &>/dev/null
+      ;;
+    *)
+      osascript -e "
+        tell application \"System Events\"
+          keystroke \"t\" using command down
+        end tell
+        delay 0.5
+        tell application \"System Events\"
+          keystroke \"tmux new-session -t $name\"
+          key code 36
+        end tell
+      " &>/dev/null
+      ;;
+  esac
+}
+
+# --- Commands ---
+
+cmd_start() {
+  local name="${1:-remote}"
+
+  # First run: auto-setup if no tunnel provider found
+  if ! command -v ngrok &>/dev/null && ! command -v cloudflared &>/dev/null; then
+    echo ""
+    echo "  No tunnel provider found. Let's set one up!"
+    cmd_setup
+    # Verify setup succeeded
+    if ! command -v ngrok &>/dev/null && ! command -v cloudflared &>/dev/null; then
+      echo "  Setup incomplete. Run 'rt setup' to try again."
+      exit 1
+    fi
+  fi
+
+  local piddir="/tmp/remote-terminal-${name}"
+
+  if [[ -d "$piddir" ]]; then
+    for pidfile in "${piddir}"/*.pid; do
+      [[ -f "$pidfile" ]] && kill -9 "$(cat "$pidfile")" 2>/dev/null
+    done
+    rm -rf "$piddir"
+  fi
+
+  mkdir -p "$piddir"
+
+  local token
+  token=$(openssl rand -hex 16)
+  echo "$token" > "${piddir}/token"
+
+  echo "Starting session '${name}'..."
+  rt_launch_services "$name" "$piddir" "$token"
+
+  local url
+  url=$(rt_wait_url "$piddir")
+  if [[ -z "$url" ]]; then
+    echo "Failed to get tunnel URL"
+    exit 1
+  fi
+
+  local full_url="${url}/${token}/"
+  echo "$full_url" > "${piddir}/url"
+  rt_print_info "$name" "$full_url"
+  rt_open_tab "$name"
+}
+
+cmd_list() {
+  local found=0
+  for piddir in /tmp/remote-terminal-*; do
+    [[ -d "$piddir" ]] || continue
+    local session="${piddir##*remote-terminal-}"
+    local state="stopped"
+    [[ -f "${piddir}/ttyd.pid" ]] && kill -0 "$(cat "${piddir}/ttyd.pid")" 2>/dev/null && state="running"
+    echo "  ${session} (${state})"
+    found=1
+  done
+  [[ $found -eq 0 ]] && echo "  No sessions."
+}
+
+cmd_qr() {
+  local name="${1:-remote}"
+  local piddir="/tmp/remote-terminal-${name}"
+
+  if [[ ! -f "${piddir}/url" ]]; then
+    echo "No active URL for session '${name}'."
+    exit 1
+  fi
+
+  local full_url
+  full_url=$(cat "${piddir}/url")
+  rt_print_info "$name" "$full_url"
+}
+
+cmd_reconnect() {
+  local name="${1:-remote}"
+  local piddir="/tmp/remote-terminal-${name}"
+
+  if ! tmux has-session -t "$name" 2>/dev/null; then
+    echo "No tmux session '${name}' to reconnect. Use 'rt ${name}' to start."
+    exit 1
+  fi
+
+  for pidfile in "${piddir}"/*.pid; do
+    [[ -f "$pidfile" ]] && kill -9 "$(cat "$pidfile")" 2>/dev/null
+  done
+
+  mkdir -p "$piddir"
+
+  local token
+  token=$(openssl rand -hex 16)
+  echo "$token" > "${piddir}/token"
+
+  echo "Reconnecting session '${name}'..."
+  rt_launch_services "$name" "$piddir" "$token"
+
+  local url
+  url=$(rt_wait_url "$piddir")
+  if [[ -z "$url" ]]; then
+    echo "Failed to get tunnel URL"
+    exit 1
+  fi
+
+  local full_url="${url}/${token}/"
+  echo "$full_url" > "${piddir}/url"
+  rt_print_info "$name" "$full_url" "reconnected"
+}
+
+cmd_stop() {
+  local name="${1:-remote}"
+
+  if [[ "$name" == "--all" ]]; then
+    for piddir in /tmp/remote-terminal-*; do
+      [[ -d "$piddir" ]] || continue
+      local session="${piddir##*remote-terminal-}"
+      cmd_stop "$session"
+    done
+    return
+  fi
+
+  local piddir="/tmp/remote-terminal-${name}"
+  if [[ ! -d "$piddir" ]]; then
+    echo "No session '${name}' found."
+    exit 1
+  fi
+
+  for pidfile in "${piddir}"/*.pid; do
+    [[ -f "$pidfile" ]] && kill -9 "$(cat "$pidfile")" 2>/dev/null
+  done
+  rm -rf "$piddir"
+  echo "Session '${name}' stopped."
+}
+
+cmd_version() {
+  echo "rt v${RT_VERSION}"
+}
+
+cmd_help() {
+  cat <<'EOF'
+Usage: rt [command] [name]
+
+Commands:
+  rt [name]              Start session (default: "remote")
+  rt setup               Interactive setup (install tunnel provider)
+  rt list|ls             List sessions
+  rt qr [name]           Reprint QR + URL
+  rt reconnect|rc [name] Relaunch tunnel for existing session
+  rt stop [name|--all]   Stop session(s)
+  rt version             Show version
+  rt help                Show this help
+EOF
+}
+
+# --- Main ---
+
+cmd="${1:-}"
+shift 2>/dev/null || true
+
+# Check for updates before starting a session (non-blocking commands skip)
+case "$cmd" in
+  setup|help|--help|-h|version|--version|-v|list|ls|stop) ;;
+  *) rt_check_update ;;
+esac
+
+case "$cmd" in
+  setup)          cmd_setup ;;
+  list|ls)        cmd_list ;;
+  qr)             cmd_qr "$@" ;;
+  reconnect|rc)   cmd_reconnect "$@" ;;
+  stop)           cmd_stop "$@" ;;
+  version|--version|-v) cmd_version ;;
+  help|--help|-h) cmd_help ;;
+  *)              cmd_start "$cmd" ;;
+esac

@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Remote Terminal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+<style>
+  .xterm-helper-textarea {
+    opacity: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    position: fixed !important;
+    top: -9999px !important;
+    left: -9999px !important;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { height: 100%; overflow: hidden; }
+  body {
+    height: 100dvh;
+    overflow: hidden;
+    background: #1e1e2e;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #terminal {
+    flex: 1;
+    min-height: 0;
+    background: #1e1e2e;
+  }
+
+  #vkb {
+    flex-shrink: 0;
+    left: 0; right: 0;
+    background: #181825;
+    border-top: 1px solid #313244;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 4px;
+  }
+
+  .vkb-row {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+  }
+
+  .vk {
+    background: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    padding: 8px 0;
+    font-size: 13px;
+    font-family: monospace;
+    font-weight: 600;
+    cursor: pointer;
+    flex: 1;
+    text-align: center;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    min-width: 0;
+  }
+  .vk:active { background: #585b70; }
+  .vk.active { background: #89b4fa; color: #1e1e2e; }
+  .vk.accent { background: #89b4fa; color: #1e1e2e; }
+  .vk.danger { background: #f38ba8; color: #1e1e2e; }
+  .vk.wide { flex: 1.5; }
+
+  #paste-row {
+    display: flex;
+    gap: 4px;
+  }
+  #paste-input {
+    flex: 1;
+    min-width: 0;
+    background: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 15px;
+    font-family: monospace;
+    outline: none;
+  }
+  #paste-input::placeholder { color: #6c7086; }
+  #paste-input:focus { border-color: #89b4fa; }
+
+  #copy-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 20;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #copy-overlay.active { display: flex; }
+  #copy-text {
+    width: 100%; max-width: 500px; height: 200px;
+    background: #313244; color: #cdd6f4;
+    border: 1px solid #89b4fa; border-radius: 8px;
+    padding: 12px; font-size: 15px; font-family: monospace;
+    resize: none; margin-bottom: 12px;
+  }
+  .overlay-btn {
+    background: #89b4fa; color: #1e1e2e; border: none;
+    border-radius: 6px; padding: 10px 20px; font-size: 14px;
+    font-weight: 600; cursor: pointer; margin: 0 4px;
+  }
+  .overlay-btn.secondary { background: #45475a; color: #cdd6f4; }
+</style>
+</head>
+<body>
+
+<div id="terminal"></div>
+
+<div id="vkb">
+  <div id="paste-row">
+    <input id="paste-input" type="text" placeholder="Paste here + Enter" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <button class="vk accent" id="copy-btn" style="flex:0 0 auto;padding:6px 12px;">Copy</button>
+  </div>
+  <div class="vkb-row">
+    <button class="vk" data-key="Escape">Esc</button>
+    <button class="vk" data-key="Tab">Tab</button>
+    <button class="vk" data-key="ArrowUp">↑</button>
+    <button class="vk" data-key="ArrowDown">↓</button>
+    <button class="vk" data-key="ArrowLeft">←</button>
+    <button class="vk" data-key="ArrowRight">→</button>
+    <button class="vk" id="ctrl-btn">Ctrl</button>
+    <button class="vk danger" data-ctrl="c">^C</button>
+  </div>
+  <div class="vkb-row">
+    <button class="vk" data-ctrl="d">^D</button>
+    <button class="vk" data-ctrl="z">^Z</button>
+    <button class="vk" data-ctrl="l">^L</button>
+    <button class="vk" data-ctrl="a">^A</button>
+    <button class="vk" data-ctrl="e">^E</button>
+    <button class="vk" data-ctrl="r">^R</button>
+    <button class="vk" data-ctrl="w">^W</button>
+    <button class="vk" data-key="|">|</button>
+    <button class="vk" data-key="/">/</button>
+    <button class="vk" data-key="~">~</button>
+  </div>
+</div>
+
+<div id="copy-overlay">
+  <textarea id="copy-text" readonly></textarea>
+  <div>
+    <button class="overlay-btn" id="copy-clipboard-btn">Copy to Clipboard</button>
+    <button class="overlay-btn secondary" id="close-overlay-btn">Close</button>
+  </div>
+</div>
+
+<script type="module">
+import { Terminal } from 'https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/+esm';
+import { FitAddon } from 'https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/+esm';
+import { WebLinksAddon } from 'https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/+esm';
+
+const term = new Terminal({
+  fontSize: 14,
+  fontFamily: 'monospace',
+  theme: { background: '#1e1e2e', foreground: '#cdd6f4' },
+  cursorBlink: true,
+  allowProposedApi: true,
+});
+
+const fitAddon = new FitAddon();
+term.loadAddon(fitAddon);
+term.loadAddon(new WebLinksAddon());
+term.open(document.getElementById('terminal'));
+fitAddon.fit();
+
+// Connect to ttyd WebSocket
+const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const wsUrl = `${proto}//${location.host}${location.pathname}terminal/ws`;
+const ws = new WebSocket(wsUrl, ['tty']);
+ws.binaryType = 'arraybuffer';
+
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+const CMD_OUTPUT = 48;
+const CMD_TITLE = 49;
+const CMD_PREFS = 50;
+const CMD_INPUT = 48;
+const CMD_RESIZE = 49;
+
+ws.onopen = async () => {
+  let authToken = '';
+  try {
+    const resp = await fetch(location.pathname + 'terminal/token');
+    const data = await resp.json();
+    authToken = data.token || '';
+  } catch(e) {}
+  const init = JSON.stringify({ AuthToken: authToken, columns: term.cols, rows: term.rows });
+  ws.send(encoder.encode(init));
+};
+
+ws.onmessage = (ev) => {
+  const data = new Uint8Array(ev.data);
+  const cmd = data[0];
+  const payload = data.slice(1);
+  if (cmd === CMD_OUTPUT) {
+    term.write(payload);
+  } else if (cmd === CMD_TITLE) {
+    try {
+      const info = JSON.parse(decoder.decode(payload));
+      if (info.title) document.title = info.title;
+    } catch(e) {}
+  }
+};
+
+ws.onclose = () => {
+  term.write('\r\n\x1b[1;31m[Connection closed]\x1b[0m\r\n');
+};
+
+term.onData((data) => {
+  if (ws.readyState === WebSocket.OPEN) {
+    const msg = new Uint8Array([CMD_INPUT, ...encoder.encode(data)]);
+    ws.send(msg);
+  }
+});
+
+function doResize() {
+  fitAddon.fit();
+  if (ws.readyState === WebSocket.OPEN) {
+    const resize = JSON.stringify({columns: term.cols, rows: term.rows});
+    const msg = new Uint8Array([CMD_RESIZE, ...encoder.encode(resize)]);
+    ws.send(msg);
+  }
+}
+window.addEventListener('resize', doResize);
+setTimeout(doResize, 100);
+setTimeout(doResize, 500);
+setTimeout(doResize, 1500);
+
+// --- Virtual Keyboard ---
+let ctrlActive = false;
+const ctrlBtn = document.getElementById('ctrl-btn');
+
+function sendData(data) {
+  if (ws.readyState === WebSocket.OPEN) {
+    const msg = new Uint8Array([CMD_INPUT, ...encoder.encode(data)]);
+    ws.send(msg);
+  }
+}
+
+const keyMap = {
+  'Escape': '\x1b',
+  'Tab': '\t',
+  'ArrowUp': '\x1b[A',
+  'ArrowDown': '\x1b[B',
+  'ArrowRight': '\x1b[C',
+  'ArrowLeft': '\x1b[D',
+  '|': '|',
+  '/': '/',
+  '~': '~',
+};
+
+document.querySelectorAll('.vk[data-key]').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const key = btn.dataset.key;
+    let data = keyMap[key] || key;
+    if (ctrlActive && key.length === 1) {
+      data = String.fromCharCode(key.charCodeAt(0) - 96);
+      ctrlActive = false;
+      ctrlBtn.classList.remove('active');
+    }
+    sendData(data);
+  });
+});
+
+document.querySelectorAll('.vk[data-ctrl]').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const ch = btn.dataset.ctrl;
+    sendData(String.fromCharCode(ch.charCodeAt(0) - 96));
+    ctrlActive = false;
+    ctrlBtn.classList.remove('active');
+  });
+});
+
+ctrlBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  ctrlActive = !ctrlActive;
+  ctrlBtn.classList.toggle('active', ctrlActive);
+});
+
+const pasteInput = document.getElementById('paste-input');
+pasteInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (pasteInput.value) {
+      sendData(pasteInput.value);
+      pasteInput.value = '';
+    }
+    pasteInput.blur();
+  }
+});
+
+const copyBtn = document.getElementById('copy-btn');
+const copyOverlay = document.getElementById('copy-overlay');
+const copyText = document.getElementById('copy-text');
+const copyClipboardBtn = document.getElementById('copy-clipboard-btn');
+const closeOverlayBtn = document.getElementById('close-overlay-btn');
+
+copyBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  fetch('api/copy').then(r => r.text()).then(text => {
+    copyText.value = text;
+    copyOverlay.classList.add('active');
+    copyText.select();
+  });
+});
+
+copyClipboardBtn.addEventListener('click', () => {
+  copyText.select();
+  navigator.clipboard.writeText(copyText.value).then(() => {
+    copyClipboardBtn.textContent = 'Copied!';
+    setTimeout(() => {
+      copyClipboardBtn.textContent = 'Copy to Clipboard';
+      copyOverlay.classList.remove('active');
+    }, 800);
+  });
+});
+
+closeOverlayBtn.addEventListener('click', () => {
+  copyOverlay.classList.remove('active');
+});
+
+term.focus();
+</script>
+</body>
+</html>
