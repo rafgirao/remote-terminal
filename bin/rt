@@ -20,6 +20,7 @@ rt_check_update() {
     case "${answer:-Y}" in
       [Yy]|"")
         echo "  Updating..."
+        brew update --quiet 2>/dev/null
         if brew upgrade rafgirao/remote-terminal/cli 2>/dev/null; then
           echo "  Updated to v${latest}!"
           echo ""
