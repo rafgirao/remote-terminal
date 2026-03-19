@@ -28,11 +28,6 @@
     flex: 1;
     min-height: 0;
     background: #1e1e2e;
-    overflow: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  #terminal .xterm-screen {
-    min-width: max-content;
   }
 
   #vkb {
@@ -169,8 +164,7 @@ import { Terminal } from 'https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/+esm';
 import { FitAddon } from 'https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/+esm';
 import { WebLinksAddon } from 'https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/+esm';
 
-const isMobile = window.innerWidth < 768;
-let currentFontSize = isMobile ? 10 : 14;
+let currentFontSize = 14;
 
 const term = new Terminal({
   fontSize: currentFontSize,
@@ -184,11 +178,7 @@ const fitAddon = new FitAddon();
 term.loadAddon(fitAddon);
 term.loadAddon(new WebLinksAddon());
 term.open(document.getElementById('terminal'));
-
-// On mobile, don't fit — keep Mac's column width and allow horizontal scroll
-if (!isMobile) {
-  fitAddon.fit();
-}
+fitAddon.fit();
 
 // Connect to ttyd WebSocket
 const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -212,10 +202,7 @@ ws.onopen = async () => {
     const data = await resp.json();
     authToken = data.token || '';
   } catch(e) {}
-  // On mobile, send large column count so tmux doesn't shrink the window
-  const cols = isMobile ? 250 : term.cols;
-  const rows = isMobile ? 50 : term.rows;
-  const init = JSON.stringify({ AuthToken: authToken, columns: cols, rows: rows });
+  const init = JSON.stringify({ AuthToken: authToken, columns: term.cols, rows: term.rows });
   ws.send(encoder.encode(init));
 };
 
@@ -245,7 +232,6 @@ term.onData((data) => {
 });
 
 function doResize() {
-  if (isMobile) return; // Mobile: don't resize — keep Mac's column width
   fitAddon.fit();
   if (ws.readyState === WebSocket.OPEN) {
     const resize = JSON.stringify({columns: term.cols, rows: term.rows});
@@ -328,7 +314,7 @@ document.getElementById('zoom-in').addEventListener('click', (e) => {
   e.preventDefault();
   currentFontSize = Math.min(currentFontSize + 1, 20);
   term.options.fontSize = currentFontSize;
-  if (!isMobile) fitAddon.fit();
+  fitAddon.fit();
   doResize();
 });
 
@@ -336,7 +322,7 @@ document.getElementById('zoom-out').addEventListener('click', (e) => {
   e.preventDefault();
   currentFontSize = Math.max(currentFontSize - 1, 6);
   term.options.fontSize = currentFontSize;
-  if (!isMobile) fitAddon.fit();
+  fitAddon.fit();
   doResize();
 });
 
