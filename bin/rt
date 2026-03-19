@@ -50,9 +50,7 @@ rt_check_update() {
 rt_prompt_update() {
   local latest="$1"
   echo ""
-  echo "  ╭─────────────────────────────────────────────╮"
-  echo "  │  Update available: v${RT_VERSION} → v${latest}            │"
-  echo "  ╰─────────────────────────────────────────────╯"
+  echo "  Update available: v${RT_VERSION} → v${latest}"
   echo ""
   read -r -p "  Update now? [Y/n] " answer </dev/tty
   case "${answer:-Y}" in
@@ -71,9 +69,7 @@ rt_prompt_update() {
 
 cmd_setup() {
   echo ""
-  echo "  ╭─────────────────────────────────────────────╮"
-  echo "  │         Remote Terminal — Setup              │"
-  echo "  ╰─────────────────────────────────────────────╯"
+  echo "  Remote Terminal — Setup"
   echo ""
 
   local has_ngrok=0 has_cloudflared=0
