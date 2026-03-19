@@ -36,7 +36,7 @@ brew install rafgirao/remote-terminal/cli
 curl -fsSL https://raw.githubusercontent.com/rafgirao/remote-terminal/main/install.sh | bash
 ```
 
-> On first run, `rt` will ask which tunnel provider you want to use (ngrok, cloudflared, or both) and install it automatically.
+After installing with either method, just run `rt`. On first run, it will ask which tunnel provider you want to use (ngrok, cloudflared, or both) and install it automatically.
 
 ### Dependencies
 
