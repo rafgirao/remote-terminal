@@ -3,6 +3,7 @@ set -euo pipefail
 
 RT_VERSION="0.3.0"
 RT_SHARE="$(cd "$(dirname "$0")/../share/rt" && pwd)"
+RT_ORIGINAL_ARGS=("$@")
 
 # --- Update Check ---
 
@@ -19,8 +20,14 @@ rt_check_update() {
     case "${answer:-Y}" in
       [Yy]|"")
         echo "  Updating..."
-        brew upgrade rafgirao/remote-terminal/cli 2>/dev/null && echo "  Updated to v${latest}!" || echo "  Update failed. Try: brew upgrade rafgirao/remote-terminal/cli"
-        echo ""
+        if brew upgrade rafgirao/remote-terminal/cli 2>/dev/null; then
+          echo "  Updated to v${latest}!"
+          echo ""
+          exec rt "${RT_ORIGINAL_ARGS[@]}"
+        else
+          echo "  Update failed. Try: brew upgrade rafgirao/remote-terminal/cli"
+          echo ""
+        fi
         ;;
       *)
         echo ""
