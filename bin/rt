@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RT_VERSION="0.5.0"
+RT_VERSION="0.6.0"
 RT_SHARE="$(cd "$(dirname "$0")/../share/rt" && pwd)"
 RT_ORIGINAL_ARGS=("${@:+$@}")
 
