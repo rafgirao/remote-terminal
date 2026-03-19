@@ -168,7 +168,7 @@ rt_ports() {
 }
 
 rt_launch_services() {
-  local name="$1" piddir="$2" token="$3"
+  local name="$1" piddir="$2" token="$3" pin="${4:-}"
 
   rt_ports "$name"
   echo "$RT_CADDY_PORT" > "${piddir}/caddy_port"
@@ -202,7 +202,7 @@ EOF
   echo $! > "${piddir}/ttyd.pid"
 
   # Clipboard bridge server
-  python3 "${RT_SHARE}/clipboard-server.py" "$name" "/${token}/terminal/" "$RT_CLIP_PORT" > "${piddir}/clip.log" 2>&1 &
+  python3 "${RT_SHARE}/clipboard-server.py" "$name" "/${token}/terminal/" "$RT_CLIP_PORT" "$pin" > "${piddir}/clip.log" 2>&1 &
   echo $! > "${piddir}/clip.pid"
 
   # Caddy
@@ -246,11 +246,14 @@ rt_wait_url() {
 }
 
 rt_print_info() {
-  local name="$1" full_url="$2" label="${3:-one-time use}"
+  local name="$1" full_url="$2" pin="${3:-}"
   echo ""
   echo "============================================"
-  echo "Session:  ${name} (${label})"
-  echo "URL:      $full_url"
+  echo "  Session:  ${name}"
+  echo "  URL:      $full_url"
+  if [[ -n "$pin" ]]; then
+  echo "  PIN:      $pin"
+  fi
   echo "============================================"
   echo ""
   qrencode -t UTF8 "$full_url"
@@ -316,12 +319,14 @@ cmd_start() {
 
   mkdir -p "$piddir"
 
-  local token
+  local token pin
   token=$(openssl rand -hex 16)
+  pin=$(printf '%04d' $(( RANDOM % 10000 )))
   echo "$token" > "${piddir}/token"
+  echo "$pin" > "${piddir}/pin"
 
   echo "Starting session '${name}'..."
-  rt_launch_services "$name" "$piddir" "$token"
+  rt_launch_services "$name" "$piddir" "$token" "$pin"
 
   local url
   url=$(rt_wait_url "$piddir")
@@ -332,7 +337,7 @@ cmd_start() {
 
   local full_url="${url}/${token}/"
   echo "$full_url" > "${piddir}/url"
-  rt_print_info "$name" "$full_url"
+  rt_print_info "$name" "$full_url" "$pin"
   rt_open_tab "$name"
 }
 
@@ -358,9 +363,10 @@ cmd_qr() {
     exit 1
   fi
 
-  local full_url
+  local full_url pin
   full_url=$(cat "${piddir}/url")
-  rt_print_info "$name" "$full_url"
+  pin=$(cat "${piddir}/pin" 2>/dev/null)
+  rt_print_info "$name" "$full_url" "$pin"
 }
 
 cmd_reconnect() {
@@ -378,12 +384,14 @@ cmd_reconnect() {
 
   mkdir -p "$piddir"
 
-  local token
+  local token pin
   token=$(openssl rand -hex 16)
+  pin=$(printf '%04d' $(( RANDOM % 10000 )))
   echo "$token" > "${piddir}/token"
+  echo "$pin" > "${piddir}/pin"
 
   echo "Reconnecting session '${name}'..."
-  rt_launch_services "$name" "$piddir" "$token"
+  rt_launch_services "$name" "$piddir" "$token" "$pin"
 
   local url
   url=$(rt_wait_url "$piddir")
@@ -394,7 +402,7 @@ cmd_reconnect() {
 
   local full_url="${url}/${token}/"
   echo "$full_url" > "${piddir}/url"
-  rt_print_info "$name" "$full_url" "reconnected"
+  rt_print_info "$name" "$full_url" "$pin"
 }
 
 cmd_stop() {
