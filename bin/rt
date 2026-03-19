@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RT_VERSION="0.1.0"
+RT_VERSION="0.2.0"
 RT_SHARE="$(cd "$(dirname "$0")/../share/rt" && pwd)"
 RT_CACHE_DIR="${HOME}/.cache/rt"
 
@@ -262,6 +262,10 @@ rt_print_info() {
 
 rt_open_tab() {
   local name="$1"
+  echo ""
+  read -r -p "  Press Enter to open the terminal tab..." </dev/tty
+  echo ""
+
   local term_program="${TERM_PROGRAM:-}"
 
   case "$term_program" in
