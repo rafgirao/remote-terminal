@@ -1,68 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RT_VERSION="0.2.0"
+RT_VERSION="0.3.0"
 RT_SHARE="$(cd "$(dirname "$0")/../share/rt" && pwd)"
-RT_CACHE_DIR="${HOME}/.cache/rt"
 
 # --- Update Check ---
 
 rt_check_update() {
-  mkdir -p "$RT_CACHE_DIR"
-  local stamp="${RT_CACHE_DIR}/last_update_check"
-  local now
-  now=$(date +%s)
-
-  # Check at most once per day
-  if [[ -f "$stamp" ]]; then
-    local last
-    last=$(cat "$stamp")
-    if (( now - last < 86400 )); then
-      # Show cached result if available
-      if [[ -f "${RT_CACHE_DIR}/update_available" ]]; then
-        local latest
-        latest=$(cat "${RT_CACHE_DIR}/update_available")
-        rt_prompt_update "$latest"
-      fi
-      return
-    fi
-  fi
-
-  echo "$now" > "$stamp"
-
-  # Fetch latest tag from GitHub (background-friendly, with timeout)
   local latest
   latest=$(curl -sf --max-time 3 "https://api.github.com/repos/rafgirao/remote-terminal/tags" 2>/dev/null \
     | grep -o '"name": *"[^"]*"' | head -1 | cut -d'"' -f4 | sed 's/^v//')
 
-  if [[ -z "$latest" ]]; then
-    return
+  if [[ -n "$latest" && "$latest" != "$RT_VERSION" ]]; then
+    echo ""
+    echo "  Update available: v${RT_VERSION} → v${latest}"
+    echo ""
+    read -r -p "  Update now? [Y/n] " answer </dev/tty
+    case "${answer:-Y}" in
+      [Yy]|"")
+        echo "  Updating..."
+        brew upgrade rafgirao/remote-terminal/cli 2>/dev/null && echo "  Updated to v${latest}!" || echo "  Update failed. Try: brew upgrade rafgirao/remote-terminal/cli"
+        echo ""
+        ;;
+      *)
+        echo ""
+        ;;
+    esac
   fi
-
-  if [[ "$latest" != "$RT_VERSION" ]]; then
-    echo "$latest" > "${RT_CACHE_DIR}/update_available"
-    rt_prompt_update "$latest"
-  else
-    rm -f "${RT_CACHE_DIR}/update_available"
-  fi
-}
-
-rt_prompt_update() {
-  local latest="$1"
-  echo ""
-  echo "  Update available: v${RT_VERSION} → v${latest}"
-  echo ""
-  read -r -p "  Update now? [Y/n] " answer </dev/tty
-  case "${answer:-Y}" in
-    [Yy]|"")
-      echo "  Updating..."
-      brew upgrade rafgirao/remote-terminal/cli 2>/dev/null && rm -f "${RT_CACHE_DIR}/update_available" && echo "  Updated to v${latest}!" || echo "  Update failed. Try: brew upgrade rafgirao/rt/rt"
-      echo ""
-      ;;
-    *)
-      echo ""
-      ;;
-  esac
 }
 
 # --- Setup ---
