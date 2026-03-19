@@ -201,7 +201,7 @@ rt_wait_url() {
 
   if [[ -z "$url" ]]; then
     echo "ngrok failed, trying cloudflared..." >&2
-    [[ -f "${piddir}/tunnel.pid" ]] && kill -9 "$(cat "${piddir}/tunnel.pid")" 2>/dev/null
+    [[ -f "${piddir}/tunnel.pid" ]] && kill -9 "$(cat "${piddir}/tunnel.pid")" 2>/dev/null || true
     cloudflared tunnel --url "http://localhost:$(cat "${piddir}/caddy_port")" --no-autoupdate > "${piddir}/tunnel.log" 2>&1 &
     echo $! > "${piddir}/tunnel.pid"
     for i in $(seq 1 30); do
@@ -351,7 +351,7 @@ cmd_reconnect() {
   fi
 
   for pidfile in "${piddir}"/*.pid; do
-    [[ -f "$pidfile" ]] && kill -9 "$(cat "$pidfile")" 2>/dev/null
+    [[ -f "$pidfile" ]] && kill -9 "$(cat "$pidfile")" 2>/dev/null || true
   done
 
   mkdir -p "$piddir"
@@ -396,7 +396,7 @@ cmd_stop() {
   fi
 
   for pidfile in "${piddir}"/*.pid; do
-    [[ -f "$pidfile" ]] && kill -9 "$(cat "$pidfile")" 2>/dev/null
+    [[ -f "$pidfile" ]] && kill -9 "$(cat "$pidfile")" 2>/dev/null || true
   done
   rm -rf "$piddir"
   echo "Session '${name}' stopped."
