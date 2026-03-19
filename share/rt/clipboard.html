@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Remote Terminal</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
 <style>
@@ -146,6 +146,8 @@
     <button class="vk" data-key="|">|</button>
     <button class="vk" data-key="/">/</button>
     <button class="vk" data-key="~">~</button>
+    <button class="vk" id="zoom-out">A-</button>
+    <button class="vk" id="zoom-in">A+</button>
   </div>
 </div>
 
@@ -162,8 +164,11 @@ import { Terminal } from 'https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/+esm';
 import { FitAddon } from 'https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/+esm';
 import { WebLinksAddon } from 'https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/+esm';
 
+const isMobile = window.innerWidth < 768;
+let currentFontSize = isMobile ? 10 : 14;
+
 const term = new Terminal({
-  fontSize: 14,
+  fontSize: currentFontSize,
   fontFamily: 'monospace',
   theme: { background: '#1e1e2e', foreground: '#cdd6f4' },
   cursorBlink: true,
@@ -303,6 +308,23 @@ pasteInput.addEventListener('keydown', (e) => {
     }
     pasteInput.blur();
   }
+});
+
+// Font size zoom
+document.getElementById('zoom-in').addEventListener('click', (e) => {
+  e.preventDefault();
+  currentFontSize = Math.min(currentFontSize + 1, 20);
+  term.options.fontSize = currentFontSize;
+  fitAddon.fit();
+  doResize();
+});
+
+document.getElementById('zoom-out').addEventListener('click', (e) => {
+  e.preventDefault();
+  currentFontSize = Math.max(currentFontSize - 1, 6);
+  term.options.fontSize = currentFontSize;
+  fitAddon.fit();
+  doResize();
 });
 
 const copyBtn = document.getElementById('copy-btn');
