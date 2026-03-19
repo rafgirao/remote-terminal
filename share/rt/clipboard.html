@@ -380,11 +380,11 @@ function exitCopyMode() {
 
 document.getElementById('scroll-up').addEventListener('click', (e) => {
   e.preventDefault();
-  sendTmuxScroll('\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A'); // 5 lines up
+  sendTmuxScroll('\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A'); // 10 lines up
 });
 document.getElementById('scroll-down').addEventListener('click', (e) => {
   e.preventDefault();
-  sendTmuxScroll('\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B'); // 5 lines down
+  sendTmuxScroll('\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B'); // 10 lines down
 });
 document.getElementById('scroll-left').addEventListener('click', (e) => {
   e.preventDefault();
