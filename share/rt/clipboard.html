@@ -28,9 +28,11 @@
     flex: 1;
     min-height: 0;
     background: #1e1e2e;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: auto;
     -webkit-overflow-scrolling: touch;
+  }
+  #terminal .xterm-screen {
+    min-width: max-content;
   }
 
   #vkb {
@@ -210,7 +212,10 @@ ws.onopen = async () => {
     const data = await resp.json();
     authToken = data.token || '';
   } catch(e) {}
-  const init = JSON.stringify({ AuthToken: authToken, columns: term.cols, rows: term.rows });
+  // On mobile, send large column count so tmux doesn't shrink the window
+  const cols = isMobile ? 250 : term.cols;
+  const rows = isMobile ? 50 : term.rows;
+  const init = JSON.stringify({ AuthToken: authToken, columns: cols, rows: rows });
   ws.send(encoder.encode(init));
 };
 
@@ -240,9 +245,8 @@ term.onData((data) => {
 });
 
 function doResize() {
-  if (!isMobile) {
-    fitAddon.fit();
-  }
+  if (isMobile) return; // Mobile: don't resize — keep Mac's column width
+  fitAddon.fit();
   if (ws.readyState === WebSocket.OPEN) {
     const resize = JSON.stringify({columns: term.cols, rows: term.rows});
     const msg = new Uint8Array([CMD_RESIZE, ...encoder.encode(resize)]);
