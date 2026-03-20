@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -o pipefail
 
-RT_VERSION="0.24.0"
+RT_VERSION="0.25.0"
 RT_SHARE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../share/rt" && pwd)"
 # --- Update Check ---
 

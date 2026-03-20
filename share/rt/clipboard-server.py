@@ -3,8 +3,10 @@
 Serves the clipboard HTML page and handles paste/copy via tmux."""
 
 import json
+import os
 import subprocess
 import sys
+from http.cookie import SimpleCookie
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -14,7 +16,7 @@ PORT = int(sys.argv[3]) if len(sys.argv) > 3 else 7680
 PIN = sys.argv[4] if len(sys.argv) > 4 else ""
 HTML_PATH = Path(__file__).parent / "clipboard.html"
 
-verified_clients = set()
+verified_tokens = set()
 
 PIN_PAGE = """<!DOCTYPE html>
 <html lang="en">
@@ -112,13 +114,17 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # silence logs
 
-    def _client_ip(self):
-        return self.headers.get("X-Forwarded-For", self.client_address[0]).split(",")[0].strip()
+    def _get_session_token(self):
+        cookie_header = self.headers.get("Cookie", "")
+        cookie = SimpleCookie(cookie_header)
+        if "rt_session" in cookie:
+            return cookie["rt_session"].value
+        return ""
 
     def _is_verified(self):
         if not PIN:
             return True
-        return self._client_ip() in verified_clients
+        return self._get_session_token() in verified_tokens
 
     def do_GET(self):
         if self.path == "/" or self.path.startswith("/?"):
@@ -163,8 +169,10 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 data = json.loads(body)
                 if data.get("pin") == PIN:
-                    verified_clients.add(self._client_ip())
+                    token = os.urandom(16).hex()
+                    verified_tokens.add(token)
                     self.send_response(200)
+                    self.send_header("Set-Cookie", f"rt_session={token}; Path=/; HttpOnly; SameSite=Strict")
                     self.end_headers()
                     return
             except Exception:
